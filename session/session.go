@@ -5,7 +5,8 @@ package session
 import "sync"
 
 type Template interface {
-	ID() uint16
+	TID() uint16
+	OID() uint32
 }
 
 type Session interface {
@@ -13,25 +14,25 @@ type Session interface {
 	Unlock()
 
 	// To keep track of maximum record sizes per template
-	GetRecordSize(uint16) (size int, found bool)
-	SetRecordSize(uint16, int)
+	GetRecordSize(uint16, uint32) (size int, found bool)
+	SetRecordSize(uint16, uint32, int)
 
 	// To keep track of templates
 	AddTemplate(Template)
-	GetTemplate(uint16) (t Template, found bool)
+	GetTemplate(uint16, uint32) (t Template, found bool)
 }
 
 type basicSession struct {
 	mutex     *sync.Mutex
-	templates map[uint16]Template
-	sizes     map[uint16]int
+	templates map[uint64]Template
+	sizes     map[uint64]int
 }
 
 func New() *basicSession {
 	return &basicSession{
 		mutex:     &sync.Mutex{},
-		templates: make(map[uint16]Template, 65536),
-		sizes:     make(map[uint16]int, 65536),
+		templates: make(map[uint64]Template, 65536),
+		sizes:     make(map[uint64]int, 65536),
 	}
 }
 
@@ -43,22 +44,29 @@ func (s *basicSession) Unlock() {
 	s.mutex.Unlock()
 }
 
-func (s *basicSession) GetRecordSize(tid uint16) (size int, found bool) {
-	size, found = s.sizes[tid]
+func (s *basicSession) combinedID(tid uint16, oid uint32) uint64 {
+	return uint64(tid)<<32 | uint64(oid)
+}
+
+func (s *basicSession) GetRecordSize(tid uint16, oid uint32) (size int, found bool) {
+	size, found = s.sizes[s.combinedID(tid, oid)]
 	return
 }
 
-func (s *basicSession) SetRecordSize(tid uint16, size int) {
-	if s.sizes[tid] < size {
-		s.sizes[tid] = size
+func (s *basicSession) SetRecordSize(tid uint16, oid uint32, size int) {
+	id := s.combinedID(tid, oid)
+	if s.sizes[id] < size {
+		s.sizes[id] = size
 	}
 }
 
 func (s *basicSession) AddTemplate(t Template) {
-	s.templates[t.ID()] = t
+	id := s.combinedID(t.TID(), t.OID())
+	s.templates[id] = t
 }
 
-func (s *basicSession) GetTemplate(id uint16) (t Template, found bool) {
+func (s *basicSession) GetTemplate(tid uint16, oid uint32) (t Template, found bool) {
+	id := s.combinedID(tid, oid)
 	t, found = s.templates[id]
 	return
 }

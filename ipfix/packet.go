@@ -59,7 +59,7 @@ func (m *Message) UnmarshalSets(r io.Reader, s session.Session, t *Translate) er
 	buffer := bytes.NewBuffer(data)
 	for buffer.Len() > 0 {
 		// Read the next set header
-		header := SetHeader{}
+		header := SetHeader{ObservationDomainID: m.Header.ObservationDomainID}
 		if err := header.Unmarshal(buffer); err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func (m *Message) UnmarshalSets(r io.Reader, s session.Session, t *Translate) er
 				ds.Bytes = data
 				continue
 			}
-			if tm, ok = s.GetTemplate(header.ID); !ok {
+			if tm, ok = s.GetTemplate(header.ID, m.Header.ObservationDomainID); !ok {
 				if debug {
 					debugLog.Printf("no template for id=%d, storing %d raw bytes in data set\n", header.ID, len(data))
 				}
@@ -313,6 +313,9 @@ type SetHeader struct {
 	// contain multiple records, the Length value MUST be used to
 	// determine the position of the next Set.
 	Length uint16
+	// ObservationDomainID is part of the MessageHeader, but is required here
+	// to pass on to the TemplateRecord
+	ObservationDomainID uint32
 }
 
 func (h *SetHeader) Bytes() []byte {
@@ -383,7 +386,7 @@ func (ts *TemplateSet) UnmarshalRecords(r io.Reader) error {
 	// TemplateRecord, otherwise it's padding.
 	ts.Records = make([]TemplateRecord, 0)
 	for buffer.Len() > 4 {
-		record := TemplateRecord{}
+		record := TemplateRecord{ObservationDomainID: ts.Header.ObservationDomainID}
 		if err := record.Unmarshal(buffer); err != nil {
 			return err
 		}
@@ -414,7 +417,8 @@ type TemplateRecord struct {
 	// fit, Collecting Processes MUST NOT assume incremental Template
 	// IDs, or anything about the contents of a Template based on its
 	// Template ID alone.
-	TemplateID uint16
+	TemplateID          uint16
+	ObservationDomainID uint32
 	// Number of fields in this Template Record.
 	FieldCount uint16
 	Fields     FieldSpecifiers
@@ -439,8 +443,12 @@ func (tr TemplateRecord) Bytes() []byte {
 	return data
 }
 
-func (tr TemplateRecord) ID() uint16 {
+func (tr TemplateRecord) TID() uint16 {
 	return tr.TemplateID
+}
+
+func (tr TemplateRecord) OID() uint32 {
+	return tr.ObservationDomainID
 }
 
 func (tr TemplateRecord) Len() int {
@@ -572,6 +580,7 @@ func (ds *DataSet) Unmarshal(r io.Reader, tr TemplateRecord, t *Translate) error
 	for buffer.Len() > 0 {
 		var dr = DataRecord{}
 		dr.TemplateID = tr.TemplateID
+		dr.ObservationDomainID = tr.ObservationDomainID
 		if err := dr.Unmarshal(buffer, tr.Fields, t); err != nil {
 			// If we hit EOF, we've exhausted the buffer. The current DataRecord is discarded,
 			// and we exit normally.
@@ -588,8 +597,9 @@ func (ds *DataSet) Unmarshal(r io.Reader, tr TemplateRecord, t *Translate) error
 }
 
 type DataRecord struct {
-	TemplateID uint16
-	Fields     Fields
+	TemplateID          uint16
+	ObservationDomainID uint32
+	Fields              Fields
 }
 
 func (dr *DataRecord) Unmarshal(r io.Reader, fss FieldSpecifiers, t *Translate) error {

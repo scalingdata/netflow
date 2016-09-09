@@ -30,9 +30,10 @@ func (t *Translate) Record(dr *DataRecord) error {
 		tr TemplateRecord
 		ok bool
 	)
-	if tm, ok = t.Session.GetTemplate(dr.TemplateID); !ok {
+	if tm, ok = t.Session.GetTemplate(dr.TemplateID, dr.ObservationDomainID); !ok {
 		if debug {
-			debugLog.Printf("no template for id=%d, can't translate field\n", dr.TemplateID)
+			debugLog.Printf("no template for id=%d, observationDomainID=%d, can't translate field\n",
+				dr.TemplateID, dr.ObservationDomainID)
 		}
 		return nil
 	}
@@ -41,7 +42,8 @@ func (t *Translate) Record(dr *DataRecord) error {
 	}
 	if tr.Fields == nil {
 		if debug {
-			debugLog.Printf("no fields in template id=%d, can't translate\n", dr.TemplateID)
+			debugLog.Printf("no fields in template id=%d, observationDomainID=%d, can't translate\n",
+				dr.TemplateID, dr.ObservationDomainID)
 		}
 		return nil
 	}

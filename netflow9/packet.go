@@ -135,7 +135,7 @@ func (p *Packet) UnmarshalFlowSets(r io.Reader, s session.Session, t *Translate)
 				dfs.Bytes = data
 				continue
 			}
-			if tm, ok = s.GetTemplate(header.ID); !ok {
+			if tm, ok = s.GetTemplate(header.ID, p.Header.SourceID); !ok {
 				if debug {
 					debugLog.Printf("no template for id=%d, storing %d raw bytes in data set\n", header.ID, len(data))
 				}
@@ -274,6 +274,7 @@ func (tfs *TemplateFlowSet) UnmarshalRecords(r io.Reader) error {
 // TemplateRecord is a Template Record as per RFC3964 section 5.2
 type TemplateRecord struct {
 	TemplateID uint16
+	SourceID   uint32
 	FieldCount uint16
 	Fields     FieldSpecifiers
 }
@@ -290,8 +291,12 @@ func (tr TemplateRecord) register(s session.Session) {
 	s.AddTemplate(tr)
 }
 
-func (tr TemplateRecord) ID() uint16 {
+func (tr TemplateRecord) TID() uint16 {
 	return tr.TemplateID
+}
+
+func (tr TemplateRecord) OID() uint32 {
+	return tr.SourceID
 }
 
 func (tr TemplateRecord) String() string {
@@ -406,6 +411,7 @@ func (dfs *DataFlowSet) Unmarshal(r io.Reader, tr TemplateRecord, t *Translate) 
 	for buffer.Len() >= 4 { // Continue until only padding alignment bytes left
 		var dr = DataRecord{}
 		dr.TemplateID = tr.TemplateID
+		dr.SourceID = tr.SourceID
 		if err := dr.Unmarshal(bytes.NewBuffer(buffer.Next(tr.Size())), tr.Fields, t); err != nil {
 			return err
 		}
@@ -417,6 +423,7 @@ func (dfs *DataFlowSet) Unmarshal(r io.Reader, tr TemplateRecord, t *Translate) 
 
 type DataRecord struct {
 	TemplateID uint16
+	SourceID   uint32
 	Fields     Fields
 }
 
